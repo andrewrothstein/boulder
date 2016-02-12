@@ -640,6 +640,21 @@ func (ra *RegistrationAuthorityImpl) checkCertificatesPerNameLimit(names []strin
 	return nil
 }
 
+func (ra *RegistrationAuthorityImpl) checkCertificatesPerNameSetLimit(names []string, limit cmd.RateLimitPolicy, regID int64) error {
+	count, err := ra.SA.CountValidNameSets(names)
+	if err != nil {
+		return err
+	}
+	core.LowerAndSort(names)
+	if int(count) > limit.GetThreshold(strings.Join(names, ","), regID) {
+		return core.RateLimitedError(fmt.Sprintf(
+			"Too many certificates already issued for name set: %s",
+			strings.Join(names, ","),
+		))
+	}
+	return nil
+}
+
 func (ra *RegistrationAuthorityImpl) checkLimits(names []string, regID int64) error {
 	limits := ra.rlPolicies
 	if limits.TotalCertificates.Enabled() {
@@ -657,6 +672,12 @@ func (ra *RegistrationAuthorityImpl) checkLimits(names []string, regID int64) er
 	}
 	if limits.CertificatesPerName.Enabled() {
 		err := ra.checkCertificatesPerNameLimit(names, limits.CertificatesPerName, regID)
+		if err != nil {
+			return err
+		}
+	}
+	if limits.CertificatesPerNameSet.Enabled() {
+		err := ra.checkCertificatesPerNameSetLimit(names, limits.CertificatesPerNameSet, regID)
 		if err != nil {
 			return err
 		}

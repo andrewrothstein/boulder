@@ -640,3 +640,12 @@ var RevocationReasons = map[RevocationCode]string{
 	9:  "privilegeWithdrawn",
 	10: "aAcompromise",
 }
+
+// NameSet contains the hash of the lowercased, comma joined dNSNames
+// contained in a certificate.
+type NameSet struct {
+	ID      int64
+	SetHash []byte
+	Serial  string
+	Expires time.Time
+}

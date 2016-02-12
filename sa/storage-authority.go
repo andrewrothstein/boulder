@@ -773,6 +773,12 @@ func (ssa *SQLStorageAuthority) AddCertificate(certDER []byte, regID int64) (dig
 		}
 	}
 
+	err = addNameSet(tx, parsedCertificate.DNSNames, serial, parsedCertificate.NotBefore)
+	if err != nil {
+		tx.Rollback()
+		return
+	}
+
 	err = tx.Commit()
 	return
 }
@@ -868,4 +874,28 @@ func (ssa *SQLStorageAuthority) AddSCTReceipt(sct core.SignedCertificateTimestam
 		err = ErrDuplicateReceipt(err.Error())
 	}
 	return err
+}
+
+func hashNames(names []string) []byte {
+	core.LowerAndSort(names)
+	hash := sha256.Sum256([]byte(strings.Join(names, ",")))
+	return hash[:]
+}
+
+func addNameSet(tx *gorp.Transaction, names []string, serial string, expires time.Time) error {
+	return tx.Insert(&core.NameSet{SetHash: hashNames(names), Serial: serial, Expires: expires})
+}
+
+// CountValidNameSets reutrns the number of currently valid sets with hash |setHash|
+func (ssa *SQLStorageAuthority) CountValidNameSets(names []string) (int64, error) {
+	var count int64
+	err := ssa.dbMap.SelectOne(
+		&count,
+		`SELECT COUNT(serial) FROM nameSets
+     WHERE setHash = ?
+     AND expires > ?`,
+		hashNames(names),
+		ssa.clk.Now(),
+	)
+	return count, err
 }

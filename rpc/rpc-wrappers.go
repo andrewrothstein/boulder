@@ -71,6 +71,7 @@ const (
 	MethodAddSCTReceipt                     = "AddSCTReceipt"                     // SA
 	MethodSubmitToCT                        = "SubmitToCT"                        // Pub
 	MethodRevokeAuthorizationsByDomain      = "RevokeAuthorizationsByDomain"      // SA
+	MethodCountValidNameSets                = "CountValidNameSets"                // SA
 )
 
 // Request structs
@@ -170,6 +171,12 @@ type revokeAuthsRequest struct {
 	Ident core.AcmeIdentifier
 }
 
+type addNameSetRequest struct {
+	Names   []string
+	Serial  string
+	Expires time.Time
+}
+
 // Response structs
 type caaResponse struct {
 	Present bool
@@ -180,6 +187,10 @@ type caaResponse struct {
 type revokeAuthsResponse struct {
 	FinalRevoked   int64
 	PendingRevoked int64
+}
+
+type countNameSetsResponse struct {
+	Count int64
 }
 
 func improperMessage(method string, err error, obj interface{}) {
@@ -1159,6 +1170,31 @@ func NewStorageAuthorityServer(rpc Server, impl core.StorageAuthority) error {
 		return nil, nil
 	})
 
+	rpc.Handle(MethodCountValidNameSets, func(req []byte) (response []byte, err error) {
+		var names []string
+		err = json.Unmarshal(req, &names)
+		if err != nil {
+			// AUDIT[ Error Conditions ] 9cc4d537-8534-4970-8665-4b382abe82f3
+			errorCondition(MethodCountValidNameSets, err, req)
+			return
+		}
+		count, err := impl.CountValidNameSets(names)
+		if err != nil {
+			// AUDIT[ Error Conditions ] 9cc4d537-8534-4970-8665-4b382abe82f3
+			errorCondition(MethodCountValidNameSets, err, req)
+			return
+		}
+
+		response, err = json.Marshal(countNameSetsResponse{count})
+		if err != nil {
+			// AUDIT[ Error Conditions ] 9cc4d537-8534-4970-8665-4b382abe82f3
+			errorCondition(MethodCountValidNameSets, err, req)
+			return
+		}
+
+		return
+	})
+
 	return nil
 }
 
@@ -1531,4 +1567,19 @@ func (cac StorageAuthorityClient) AddSCTReceipt(sct core.SignedCertificateTimest
 
 	_, err = cac.rpc.DispatchSync(MethodAddSCTReceipt, data)
 	return
+}
+
+// CountValidNameSets reutrns the number of currently valid sets with hash |setHash|
+func (cac StorageAuthorityClient) CountValidNameSets(names []string) (int64, error) {
+	data, err := json.Marshal(names)
+	if err != nil {
+		return 0, err
+	}
+	response, err := cac.rpc.DispatchSync(MethodCountValidNameSets, data)
+	if err != nil {
+		return 0, err
+	}
+	var count countNameSetsResponse
+	err = json.Unmarshal(response, &count)
+	return count.Count, err
 }

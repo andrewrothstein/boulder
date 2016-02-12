@@ -667,3 +667,50 @@ func TestRevokeAuthorizationsByDomain(t *testing.T) {
 	test.AssertEquals(t, PA.Status, core.StatusRevoked)
 	test.AssertEquals(t, FA.Status, core.StatusRevoked)
 }
+
+func TestNameSets(t *testing.T) {
+	sa, fc, cleanUp := initSA(t)
+	defer cleanUp()
+
+	tx, err := sa.dbMap.Begin()
+	test.AssertNotError(t, err, "Failed to open transaction")
+	names := []string{"a.example.com", "B.example.com"}
+	expires := fc.Now().Add(time.Hour * 2).UTC()
+	err = addNameSet(tx, names, "serial", expires)
+	test.AssertNotError(t, err, "Failed to add name set")
+	test.AssertNotError(t, tx.Commit(), "Failed to commit transaction")
+
+	// only one valid
+	count, err := sa.CountValidNameSets(names)
+	test.AssertNotError(t, err, "Failed to count name sets")
+	test.AssertEquals(t, count, int64(1))
+
+	// check hash isn't affected by changing name order/casing
+	count, err = sa.CountValidNameSets([]string{"b.example.com", "A.example.COM"})
+	test.AssertNotError(t, err, "Failed to count name sets")
+	test.AssertEquals(t, count, int64(1))
+
+	// add another valid set
+	tx, err = sa.dbMap.Begin()
+	test.AssertNotError(t, err, "Failed to open transaction")
+	err = addNameSet(tx, names, "anotherSerial", expires)
+	test.AssertNotError(t, err, "Failed to add name set")
+	test.AssertNotError(t, tx.Commit(), "Failed to commit transaction")
+
+	// only two valid
+	count, err = sa.CountValidNameSets(names)
+	test.AssertNotError(t, err, "Failed to count name sets")
+	test.AssertEquals(t, count, int64(2))
+
+	// add an expired set
+	tx, err = sa.dbMap.Begin()
+	test.AssertNotError(t, err, "Failed to open transaction")
+	err = addNameSet(tx, names, "yetAnotherSerial", expires.Add(-3*time.Hour))
+	test.AssertNotError(t, err, "Failed to add name set")
+	test.AssertNotError(t, tx.Commit(), "Failed to commit transaction")
+
+	// only two valid
+	count, err = sa.CountValidNameSets(names)
+	test.AssertNotError(t, err, "Failed to count name sets")
+	test.AssertEquals(t, count, int64(2))
+}

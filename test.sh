@@ -157,7 +157,7 @@ function run_unit_tests() {
     [ -e $GOBIN/goveralls ] && $GOBIN/goveralls -coverprofile=gover.coverprofile -service=travis-ci
   else
     # Run all the tests together if local, for speed
-    run go test $GOTESTFLAGS ./...
+    run go test -p 1 $GOTESTFLAGS ./...
   fi
 }
 

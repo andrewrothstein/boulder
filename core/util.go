@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -421,4 +422,12 @@ func RetryBackoff(retries int, base, max time.Duration, factor float64) time.Dur
 	// the same time, they won't operate in lockstep.
 	backoff *= (1 - retryJitter) + 2*retryJitter*mrand.Float64()
 	return time.Duration(backoff)
+}
+
+// LowerAndSort lowercases each string in a slice before sorting it
+func LowerAndSort(strs []string) {
+	for i := range strs {
+		strs[i] = strings.ToLower(strs[i])
+	}
+	sort.Strings(strs)
 }
